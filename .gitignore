@@ -1,0 +1,14 @@
+/target
+.vscode/
+
+# Secrets & local credentials (defense in depth)
+.env
+.env.*
+!.env.example
+
+*.pem
+*.p12
+*.pfx
+
+# Local overrides that may contain API keys
+config.local.json
