@@ -18,6 +18,12 @@ mkdir -p "${APP_DIR}/Contents/Resources"
 cp target/release/whispy "${APP_DIR}/Contents/MacOS/whispy"
 cp Info.plist "${APP_DIR}/Contents/Info.plist"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+if [[ -f "${REPO_ROOT}/assets/AppIcon.icns" ]]; then
+    cp "${REPO_ROOT}/assets/AppIcon.icns" "${APP_DIR}/Contents/Resources/AppIcon.icns"
+fi
+
 echo "==> Registering to start at login..."
 # Unload existing agent if present
 launchctl bootout "gui/$(id -u)/${PLIST_LABEL}" 2>/dev/null || true
