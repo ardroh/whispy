@@ -42,33 +42,38 @@ fn mix(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
 
-/// Template-style tray glyph: black + alpha only (macOS tints it).
+/// Template-style tray glyph: bold "W" + EQ bars (black + alpha; macOS tints it).
 fn render_tray_idle(size: u32) -> RgbaImage {
     let mut img = RgbaImage::from_pixel(size, size, Rgba([0, 0, 0, 0]));
     let s = size as f32;
     let cx = s * 0.5;
     let cy = s * 0.52;
     let scale = s / 44.0;
+    const STROKE: f32 = 1.65;
+    const BAR_R: f32 = 1.05;
 
     for y in 0..size {
         for x in 0..size {
             let px = (x as f32 + 0.5 - cx) / scale;
             let py = (y as f32 + 0.5 - cy) / scale;
 
-            // Whisper breath strokes (left)
-            let w1 = thick_line(px, py, -18.0, -9.0, -10.0, 1.0, 1.7);
-            let w2 = thick_line(px, py, -19.0, 3.0, -11.0, 9.0, 1.5);
-            let whisper = (smooth_complement(w1).max(smooth_complement(w2))).min(1.0);
+            let l1 = thick_line(px, py, -15.0, -11.0, -8.0, 9.0, STROKE);
+            let l2 = thick_line(px, py, -8.0, 9.0, 0.0, -3.0, STROKE);
+            let l3 = thick_line(px, py, 0.0, -3.0, 8.0, 9.0, STROKE);
+            let l4 = thick_line(px, py, 8.0, 9.0, 15.0, -11.0, STROKE);
+            let w_stroke = smooth_complement(l1)
+                .max(smooth_complement(l2))
+                .max(smooth_complement(l3))
+                .max(smooth_complement(l4));
 
-            // Mic head (circle) + body (capsule)
-            let head = sdf_circle(px, py, 0.0, -7.0, 4.6);
-            let body = sdf_capsule(px, py, 0.0, -2.5, 0.0, 8.5, 3.0);
-            // U-shaped stand
-            let stand = sdf_stand(px, py);
-            let mic = head.min(body).min(stand);
+            let b1 = sdf_capsule(px, py, -3.8, 6.2, -3.8, 9.3, BAR_R);
+            let b2 = sdf_capsule(px, py, 0.0, 2.0, 0.0, 9.3, BAR_R);
+            let b3 = sdf_capsule(px, py, 3.8, 6.2, 3.8, 9.3, BAR_R);
+            let bars = smooth_complement(b1)
+                .max(smooth_complement(b2))
+                .max(smooth_complement(b3));
 
-            let mut a = smooth_complement(mic).max(whisper);
-            a = a.clamp(0.0, 1.0);
+            let a = w_stroke.max(bars).clamp(0.0, 1.0);
             if a > 0.001 {
                 let edge = smoothstep(0.0, 1.0, a);
                 img.put_pixel(x, y, Rgba([0, 0, 0, (edge * 235.0) as u8]));
@@ -115,21 +120,6 @@ fn thick_line(px: f32, py: f32, ax: f32, ay: f32, bx: f32, by: f32, half: f32) -
     sdf_line(px, py, ax, ay, bx, by) - half
 }
 
-fn sdf_stand(x: f32, y: f32) -> f32 {
-    let leg = sdf_capsule(x, y, 0.0, 10.0, 0.0, 15.0, 1.4);
-    let arc = {
-        let dx = x;
-        let dy = y - 11.0;
-        let d = (dx * dx + dy * dy).sqrt() - 7.0;
-        if dy < 0.0 && dx.abs() < 7.5 {
-            d
-        } else {
-            50.0
-        }
-    };
-    leg.min(arc)
-}
-
 fn smooth_complement(sdf: f32) -> f32 {
     1.0 - smoothstep(-1.1, 1.1, sdf)
 }
@@ -174,7 +164,8 @@ fn render_tray_recording(size: u32) -> RgbaImage {
 }
 
 fn render_app_icon(size: u32) -> RgbaImage {
-    let mut img = RgbaImage::new(size, size);
+    // Opaque black outside the rounded tile (avoids transparent “halo” in Finder / Spotlight).
+    let mut img = RgbaImage::from_pixel(size, size, Rgba([0, 0, 0, 255]));
     let s = size as f32;
     let pad = s * 0.18;
     let r_corner = s * 0.22;
@@ -210,7 +201,6 @@ fn render_app_icon(size: u32) -> RgbaImage {
                 continue;
             }
 
-            // Background gradient (violet → teal)
             let r_top = mix(58.0, 22.0, u * 0.6 + v * 0.4);
             let g_top = mix(32.0, 120.0, u * 0.5 + v * 0.5);
             let b_top = mix(92.0, 130.0, (1.0 - u) * 0.4 + v * 0.6);
@@ -220,7 +210,6 @@ fn render_app_icon(size: u32) -> RgbaImage {
             let gg = ((g_top + highlight * 40.0).min(255.0)) as u8;
             let bb = ((b_top + highlight * 35.0).min(255.0)) as u8;
 
-            // Logo SDF in normalized icon coords
             let gx = (px - s * 0.5) / (s * 0.34);
             let gy = (py - s * 0.5) / (s * 0.34);
             let logo = app_logo_sdf(gx, gy);
@@ -229,10 +218,13 @@ fn render_app_icon(size: u32) -> RgbaImage {
             let lr = 248u32;
             let lg = 250u32;
             let lb = 252u32;
-            let fr = mix(rr as f32, lr as f32, logo_a) as u8;
-            let fg = mix(gg as f32, lg as f32, logo_a) as u8;
-            let fb = mix(bb as f32, lb as f32, logo_a) as u8;
-            img.put_pixel(x, y, Rgba([fr, fg, fb, (mask * 255.0) as u8]));
+            let ir = mix(rr as f32, lr as f32, logo_a);
+            let ig = mix(gg as f32, lg as f32, logo_a);
+            let ib = mix(bb as f32, lb as f32, logo_a);
+            let fr = (ir * mask).clamp(0.0, 255.0) as u8;
+            let fg = (ig * mask).clamp(0.0, 255.0) as u8;
+            let fb = (ib * mask).clamp(0.0, 255.0) as u8;
+            img.put_pixel(x, y, Rgba([fr, fg, fb, 255]));
         }
     }
     img
@@ -287,15 +279,23 @@ fn build_icns(assets: &Path, src1024: &Path) {
     }
 
     let icns_out = assets.join("AppIcon.icns");
-    let _ = std::fs::remove_file(&icns_out);
+    // iconutil requires the output path to end in `.icns` (not `.part`).
+    let icns_tmp = std::env::temp_dir().join("whispy-gen-AppIcon.icns");
+    let _ = std::fs::remove_file(&icns_tmp);
     let st = Command::new("iconutil")
         .args(["-c", "icns", "-o"])
-        .arg(&icns_out)
+        .arg(&icns_tmp)
         .arg(&set_dir)
         .status()
         .expect("iconutil");
     if !st.success() {
-        eprintln!("iconutil failed");
+        eprintln!("iconutil failed (left existing AppIcon.icns untouched)");
+        let _ = std::fs::remove_file(&icns_tmp);
+        return;
+    }
+    if let Err(e) = std::fs::rename(&icns_tmp, &icns_out) {
+        eprintln!("rename AppIcon.icns: {e}");
+        let _ = std::fs::remove_file(&icns_tmp);
         return;
     }
     let _ = std::fs::remove_dir_all(&set_dir);
