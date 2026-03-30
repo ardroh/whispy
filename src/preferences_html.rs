@@ -51,7 +51,15 @@ pub fn build(
         .collect::<Vec<_>>()
         .join("\n");
 
-    let lang_options: String = LANGUAGES
+    let lang_options_auto: String = {
+        let selected = if current_language.trim().eq_ignore_ascii_case("auto") {
+            " selected"
+        } else {
+            ""
+        };
+        format!(r#"<option value="auto"{selected}>Auto (detect language)</option>"#)
+    };
+    let lang_options_rest: String = LANGUAGES
         .iter()
         .map(|(code, name)| {
             let selected = if *code == current_language { " selected" } else { "" };
@@ -59,6 +67,7 @@ pub fn build(
         })
         .collect::<Vec<_>>()
         .join("\n");
+    let lang_options = format!("{lang_options_auto}\n{lang_options_rest}");
 
     format!(
         r##"<!DOCTYPE html>
@@ -138,7 +147,7 @@ pub fn build(
   <div class="field">
     <label for="language">Language</label>
     <select id="language">{lang_options}</select>
-    <div class="hint">Forces transcription in the selected language</div>
+    <div class="hint">Auto uses Whisper default (language detection). Or choose a language to bias recognition.</div>
   </div>
   <div class="field">
     <label for="hotkey">Shortcut</label>

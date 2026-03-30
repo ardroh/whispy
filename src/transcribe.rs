@@ -21,11 +21,13 @@ pub async fn transcribe(
         .file_name("audio.wav")
         .mime_str("audio/wav")?;
 
-    let form = multipart::Form::new()
+    let mut form = multipart::Form::new()
         .text("model", model.to_string())
-        .text("response_format", "text")
-        .text("language", language.to_string())
-        .part("file", file_part);
+        .text("response_format", "text");
+    if whisper_language_fixed(language) {
+        form = form.text("language", language.trim().to_string());
+    }
+    let form = form.part("file", file_part);
 
     let response = client
         .post("https://api.openai.com/v1/audio/transcriptions")
@@ -46,6 +48,12 @@ pub async fn transcribe(
         .await
         .context("Failed to read response body")?;
     Ok(text.trim().to_string())
+}
+
+/// When false, the `language` form field is omitted so the API auto-detects (Whisper default).
+fn whisper_language_fixed(language: &str) -> bool {
+    let l = language.trim().to_lowercase();
+    !l.is_empty() && l != "auto"
 }
 
 /// Estimate WAV duration in seconds from the raw bytes (assumes standard WAV header).

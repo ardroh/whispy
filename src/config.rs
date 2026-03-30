@@ -19,7 +19,7 @@ fn default_model() -> String {
 }
 
 fn default_language() -> String {
-    "en".to_string()
+    "auto".to_string()
 }
 
 fn default_hotkey() -> String {
