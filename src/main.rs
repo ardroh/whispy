@@ -1,6 +1,9 @@
 mod app;
 mod audio;
 mod config;
+mod history;
+mod history_html;
+mod history_window;
 mod hotkey;
 mod overlay;
 mod overlay_html;
@@ -12,11 +15,12 @@ mod transcribe;
 mod tray;
 
 use app::{AppState, UserEvent};
+use history_window::HistoryWindow;
 use hotkey::HotkeyHandler;
 use preferences::PreferencesWindow;
+use std::time::{Duration, Instant};
 use tao::event::{Event, StartCause, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
-use std::time::{Duration, Instant};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -41,8 +45,7 @@ fn init_logging() -> tracing_appender::non_blocking::WorkerGuard {
         .with_writer(file_writer)
         .with_ansi(false);
 
-    let stderr_layer = tracing_subscriber::fmt::layer()
-        .with_writer(std::io::stderr);
+    let stderr_layer = tracing_subscriber::fmt::layer().with_writer(std::io::stderr);
 
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
@@ -61,15 +64,16 @@ fn main() {
 
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
 
-    let mut state = AppState::new(event_loop.create_proxy())
-        .expect("Failed to initialize app state");
+    let mut state =
+        AppState::new(event_loop.create_proxy()).expect("Failed to initialize app state");
 
     permissions::ensure_prompted_on_first_launch();
 
     let tray = tray::Tray::new().expect("Failed to create tray icon");
-    let mut hotkey_handler = HotkeyHandler::new(&state.config.hotkey)
-        .expect("Failed to register global hotkey");
+    let mut hotkey_handler =
+        HotkeyHandler::new(&state.config.hotkey).expect("Failed to register global hotkey");
     let mut prefs_window: Option<PreferencesWindow> = None;
+    let mut history_window: Option<HistoryWindow> = None;
 
     let mut overlay: Option<overlay::OverlayWindow> = None;
 
@@ -98,6 +102,11 @@ fn main() {
                     if let Err(e) = hotkey_handler.update_hotkey(&state.config.hotkey) {
                         tracing::error!("Failed to update hotkey: {}", e);
                     }
+                } else if history_window
+                    .as_ref()
+                    .is_some_and(|hw| hw.window_id == window_id)
+                {
+                    history_window = None;
                 }
             }
 
@@ -123,8 +132,11 @@ fn main() {
                         *control_flow = ControlFlow::Exit;
                     } else if menu_id == tray.prefs_id {
                         if prefs_window.is_none() {
-                            prefs_window =
-                                Some(PreferencesWindow::new(event_loop, &state.config));
+                            prefs_window = Some(PreferencesWindow::new(event_loop, &state.config));
+                        }
+                    } else if menu_id == tray.history_id {
+                        if history_window.is_none() {
+                            history_window = Some(HistoryWindow::new(event_loop));
                         }
                     } else if menu_id == tray.logs_id {
                         open_log_file();

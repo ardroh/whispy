@@ -1,5 +1,6 @@
 use crate::audio::{raw_to_wav, AudioRecorder};
 use crate::config::Config;
+use crate::history;
 use crate::paste;
 use crate::transcribe;
 use crate::tray::Tray;
@@ -116,9 +117,10 @@ impl AppState {
                 Ok(w) => w,
                 Err(e) => {
                     tracing::error!("Failed to encode WAV: {}", e);
-                    let _ = proxy.send_event(UserEvent::TranscriptionComplete(Err(
-                        format!("Recording error: {}", e),
-                    )));
+                    let _ = proxy.send_event(UserEvent::TranscriptionComplete(Err(format!(
+                        "Recording error: {}",
+                        e
+                    ))));
                     return;
                 }
             };
@@ -136,10 +138,9 @@ impl AppState {
 
             let event = match result {
                 Ok(text) => UserEvent::TranscriptionComplete(Ok(text)),
-                Err(e) => UserEvent::TranscriptionComplete(Err(format!(
-                    "Transcription failed: {}",
-                    e
-                ))),
+                Err(e) => {
+                    UserEvent::TranscriptionComplete(Err(format!("Transcription failed: {}", e)))
+                }
             };
             let _ = proxy.send_event(event);
         });
@@ -158,6 +159,10 @@ impl AppState {
                 }
 
                 tracing::info!("Transcription: {}", text);
+                if let Err(e) = history::save_transcription(&text) {
+                    tracing::error!("Failed to save transcription history: {}", e);
+                }
+
                 if let Err(e) = paste::paste_text(&text) {
                     tracing::error!("Failed to paste text: {}", e);
                     show_notification("Whispy", &format!("Failed to paste: {}", e));

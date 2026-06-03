@@ -30,11 +30,18 @@ Subscription dictation tools tax everyone for a thin client. Whispy is a **nativ
 
 - Global shortcut → record → transcribe → **paste** (clipboard + simulated ⌘V)
 - **Menu bar tray** → **Preferences...** for API key, Whisper model, language, and shortcut
+- **Transcription History...** keeps the latest 100 successful transcriptions for copying later
 - `.app` install via `scripts/install.sh` (Launch Agent optional)
 
 ## Configuration
 
 Open the **Whispy** icon in the **menu bar**, then choose **Preferences...**. Settings are written to `~/Library/Application Support/whispy/config.json` and picked up again when you close the window and before each recording.
+
+## Transcription History
+
+Open the **Whispy** icon in the **menu bar**, then choose **History...** to see recent transcriptions with the newest items first. Use **Copy** to put an older transcription back on the clipboard.
+
+Whispy stores the latest 100 successful non-empty transcriptions locally at `~/Library/Application Support/whispy/history.json`. Use **Clear** in the history window to remove them.
 
 ## Requirements
 

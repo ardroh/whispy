@@ -12,6 +12,7 @@ pub struct Tray {
     recording_icon: Icon,
     pub quit_id: MenuId,
     pub prefs_id: MenuId,
+    pub history_id: MenuId,
     pub logs_id: MenuId,
     pub perms_id: MenuId,
 }
@@ -23,11 +24,13 @@ impl Tray {
 
         let quit_item = MenuItem::new("Quit", true, None);
         let prefs_item = MenuItem::new("Preferences...", true, None);
+        let history_item = MenuItem::new("History...", true, None);
         let logs_item = MenuItem::new("View Logs...", true, None);
         let perms_item = MenuItem::new("Check Permissions...", true, None);
 
         let quit_id = quit_item.id().clone();
         let prefs_id = prefs_item.id().clone();
+        let history_id = history_item.id().clone();
         let logs_id = logs_item.id().clone();
         let perms_id = perms_item.id().clone();
 
@@ -35,6 +38,7 @@ impl Tray {
         let _ = menu.append(&MenuItem::new("Whispy", false, None));
         let _ = menu.append(&PredefinedMenuItem::separator());
         let _ = menu.append(&prefs_item);
+        let _ = menu.append(&history_item);
         let _ = menu.append(&logs_item);
         let _ = menu.append(&perms_item);
         let _ = menu.append(&PredefinedMenuItem::separator());
@@ -56,6 +60,7 @@ impl Tray {
             recording_icon,
             quit_id,
             prefs_id,
+            history_id,
             logs_id,
             perms_id,
         })
@@ -79,10 +84,9 @@ impl Tray {
         if recording {
             #[cfg(target_os = "macos")]
             {
-                let _ = self.tray.set_icon_with_as_template(
-                    Some(self.recording_icon.clone()),
-                    false,
-                );
+                let _ = self
+                    .tray
+                    .set_icon_with_as_template(Some(self.recording_icon.clone()), false);
             }
             #[cfg(not(target_os = "macos"))]
             {
@@ -109,7 +113,10 @@ impl Tray {
     }
 
     pub fn check_menu_event(&self) -> Option<MenuId> {
-        MenuEvent::receiver().try_recv().ok().map(|e| e.id().clone())
+        MenuEvent::receiver()
+            .try_recv()
+            .ok()
+            .map(|e| e.id().clone())
     }
 }
 
