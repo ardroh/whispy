@@ -60,3 +60,8 @@ Models are fetched live from `GET /v1/models` and filtered for IDs containing "w
 ### Crate Ecosystem
 
 The tray, hotkey, and event loop crates (`tray-icon`, `global-hotkey`, `tao`) are all from the Tauri ecosystem and share the same event channel pattern — poll receivers with `try_recv()` each frame.
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
