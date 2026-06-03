@@ -114,6 +114,14 @@ hooks:
     prompt: Commit task changes?
     description: Auto-commit after task generation
     condition: null
+  - extension: parallel-implement
+    command: speckit.parallel-implement.run
+    enabled: true
+    optional: true
+    prompt: Start parallel implementation? User stories run in worktrees concurrently,
+      then merge sequentially.
+    description: Offer parallel implementation after tasks are generated
+    condition: null
   after_implement:
   - extension: git
     command: speckit.git.commit
