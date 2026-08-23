@@ -28,7 +28,7 @@ impl OverlayWindow {
             .with_resizable(false)
             .with_transparent(true)
             .with_visible(false)
-            .with_inner_size(LogicalSize::new(360.0, 56.0))
+            .with_inner_size(LogicalSize::new(460.0, 64.0))
             .with_position(LogicalPosition::new(pos_x, pos_y))
             .build(event_loop)
             .expect("Failed to create overlay window");
@@ -39,10 +39,14 @@ impl OverlayWindow {
         let webview = WebViewBuilder::new()
             .with_html(&html)
             .with_transparent(true)
-            .with_ipc_handler(move |request| {
-                if request.body() == "toggle_pause" {
+            .with_ipc_handler(move |request| match request.body().as_str() {
+                "toggle_pause" => {
                     let _ = event_proxy.send_event(UserEvent::OverlayTogglePause);
                 }
+                "finish" => {
+                    let _ = event_proxy.send_event(UserEvent::OverlayFinish);
+                }
+                _ => {}
             })
             .build(&window)
             .expect("Failed to create overlay webview");
@@ -105,8 +109,8 @@ impl OverlayWindow {
 fn screen_bottom_center(
     event_loop: &tao::event_loop::EventLoopWindowTarget<UserEvent>,
 ) -> (f64, f64) {
-    let overlay_w = 360.0;
-    let overlay_h = 56.0;
+    let overlay_w = 460.0;
+    let overlay_h = 64.0;
     let margin_bottom = 30.0;
 
     if let Some(monitor) = event_loop.primary_monitor() {
@@ -124,7 +128,7 @@ fn screen_bottom_center(
 
 #[cfg(target_os = "macos")]
 fn configure_ns_window(window: &Window) {
-    use objc2_app_kit::{NSColor, NSWindow, NSWindowCollectionBehavior};
+    use objc2_app_kit::{NSColor, NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask};
     use tao::platform::macos::WindowExtMacOS;
 
     unsafe {
@@ -134,6 +138,10 @@ fn configure_ns_window(window: &Window) {
         ns_window.setBackgroundColor(Some(&NSColor::clearColor()));
         ns_window.setOpaque(false);
         ns_window.setHasShadow(false);
+        // Keep button clicks from activating Whispy. The overlay is still
+        // mouse-interactive, but the previously focused app remains active so
+        // the eventual Cmd+V goes to the right place.
+        ns_window.setStyleMask(ns_window.styleMask() | NSWindowStyleMask::NonactivatingPanel);
         ns_window.setLevel(25);
         ns_window.setCollectionBehavior(
             NSWindowCollectionBehavior::CanJoinAllSpaces

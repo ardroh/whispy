@@ -18,6 +18,7 @@ pub enum Phase {
 pub enum UserEvent {
     TranscriptionComplete(Result<String, String>),
     OverlayTogglePause,
+    OverlayFinish,
 }
 
 pub struct AppState {

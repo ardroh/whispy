@@ -106,16 +106,11 @@ fn main() {
                 }
                 UserEvent::OverlayTogglePause => {
                     state.toggle_pause(&tray);
-                    if let Some(ref ov) = overlay {
-                        if state.phase == app::Phase::Paused {
-                            ov.set_paused(
-                                pause_hotkey_label(),
-                                record_hotkey_label(&state.config.hotkey),
-                            );
-                        } else if state.phase == app::Phase::Recording {
-                            ov.set_recording();
-                        }
-                    }
+                    sync_overlay_phase(&mut overlay, &state);
+                }
+                UserEvent::OverlayFinish => {
+                    state.toggle_recording(&tray);
+                    sync_overlay_phase(&mut overlay, &state);
                 }
             },
 
@@ -127,26 +122,11 @@ fn main() {
                     match action {
                         HotkeyAction::ToggleRecording => {
                             state.toggle_recording(&tray);
-                            if let Some(ref ov) = overlay {
-                                if state.phase == app::Phase::Transcribing {
-                                    ov.set_processing();
-                                } else if state.phase == app::Phase::Recording {
-                                    ov.set_recording();
-                                }
-                            }
+                            sync_overlay_phase(&mut overlay, &state);
                         }
                         HotkeyAction::TogglePause => {
                             state.toggle_pause(&tray);
-                            if let Some(ref ov) = overlay {
-                                if state.phase == app::Phase::Paused {
-                                    ov.set_paused(
-                                        pause_hotkey_label(),
-                                        record_hotkey_label(&state.config.hotkey),
-                                    );
-                                } else if state.phase == app::Phase::Recording {
-                                    ov.set_recording();
-                                }
-                            }
+                            sync_overlay_phase(&mut overlay, &state);
                         }
                     }
                 }
@@ -164,27 +144,10 @@ fn main() {
                         permissions::check_permissions_interactive();
                     } else if menu_id == tray.pause_id {
                         state.toggle_pause(&tray);
-                        if let Some(ref ov) = overlay {
-                            if state.phase == app::Phase::Paused {
-                                ov.set_paused(
-                                    pause_hotkey_label(),
-                                    record_hotkey_label(&state.config.hotkey),
-                                );
-                            } else if state.phase == app::Phase::Recording {
-                                ov.set_recording();
-                            }
-                        }
+                        sync_overlay_phase(&mut overlay, &state);
                     } else if menu_id == tray.finish_id {
                         state.toggle_recording(&tray);
-                        if state.phase == app::Phase::Transcribing {
-                            if let Some(ref ov) = overlay {
-                                ov.set_processing();
-                            }
-                        } else if state.phase == app::Phase::Recording {
-                            if let Some(ref ov) = overlay {
-                                ov.set_recording();
-                            }
-                        }
+                        sync_overlay_phase(&mut overlay, &state);
                     }
                 }
 
@@ -208,6 +171,31 @@ fn main() {
             _ => {}
         }
     });
+}
+
+fn sync_overlay_phase(overlay: &mut Option<overlay::OverlayWindow>, state: &AppState) {
+    let Some(ov) = overlay.as_mut() else {
+        return;
+    };
+
+    match state.phase {
+        app::Phase::Recording => {
+            ov.show();
+            ov.set_recording();
+        }
+        app::Phase::Paused => {
+            ov.show();
+            ov.set_paused(
+                pause_hotkey_label(),
+                record_hotkey_label(&state.config.hotkey),
+            );
+        }
+        app::Phase::Transcribing => {
+            ov.show();
+            ov.set_processing();
+        }
+        app::Phase::Idle => ov.hide(),
+    }
 }
 
 fn open_log_file() {
