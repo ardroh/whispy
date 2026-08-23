@@ -28,7 +28,7 @@ Subscription dictation tools tax everyone for a thin client. Whispy is a **nativ
 
 ## Features
 
-- Global shortcut → record → transcribe → **paste** (clipboard + simulated ⌘V)
+- Global shortcut → record → Finish & Paste, with pause/resume support (clipboard + simulated ⌘V)
 - **Menu bar tray** → **Preferences...** for API key, Whisper model, language, and shortcut
 - `.app` install via `scripts/install.sh` (Launch Agent optional)
 
@@ -51,7 +51,7 @@ cd whispy
 cargo run
 ```
 
-On first launch, use the tray icon → **Preferences...** and add your API key. Default shortcut: `⌃ ⌘ ⇧ Space` (change it there).
+On first launch, use the tray icon → **Preferences...** and add your API key. The default shortcut is `⌃ ⌘ ⇧ Space` (change it there). Press it once to start and again to finish and paste. While recording, use `⌃ ⇧ P` or the pause button in the overlay to pause/resume without submitting.
 
 **Release + `~/Applications/Whispy.app`:**
 

@@ -5,34 +5,48 @@ use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
 const IDLE_PNG: &[u8] = include_bytes!("../assets/tray-idle.png");
 const RECORDING_PNG: &[u8] = include_bytes!("../assets/tray-recording.png");
+const PAUSED_PNG: &[u8] = include_bytes!("../assets/tray-paused.png");
 
 pub struct Tray {
     tray: TrayIcon,
     idle_icon: Icon,
     recording_icon: Icon,
+    paused_icon: Icon,
+    pause_item: MenuItem,
+    finish_item: MenuItem,
     pub quit_id: MenuId,
     pub prefs_id: MenuId,
     pub logs_id: MenuId,
     pub perms_id: MenuId,
+    pub pause_id: MenuId,
+    pub finish_id: MenuId,
 }
 
 impl Tray {
     pub fn new() -> Result<Self> {
         let idle_icon = icon_from_png(IDLE_PNG)?;
         let recording_icon = icon_from_png(RECORDING_PNG)?;
+        let paused_icon = icon_from_png(PAUSED_PNG)?;
 
         let quit_item = MenuItem::new("Quit", true, None);
         let prefs_item = MenuItem::new("Preferences...", true, None);
         let logs_item = MenuItem::new("View Logs...", true, None);
         let perms_item = MenuItem::new("Check Permissions...", true, None);
+        let pause_item = MenuItem::new("Pause Recording", false, None);
+        let finish_item = MenuItem::new("Finish & Paste", false, None);
 
         let quit_id = quit_item.id().clone();
         let prefs_id = prefs_item.id().clone();
         let logs_id = logs_item.id().clone();
         let perms_id = perms_item.id().clone();
+        let pause_id = pause_item.id().clone();
+        let finish_id = finish_item.id().clone();
 
         let menu = Menu::new();
         let _ = menu.append(&MenuItem::new("Whispy", false, None));
+        let _ = menu.append(&PredefinedMenuItem::separator());
+        let _ = menu.append(&pause_item);
+        let _ = menu.append(&finish_item);
         let _ = menu.append(&PredefinedMenuItem::separator());
         let _ = menu.append(&prefs_item);
         let _ = menu.append(&logs_item);
@@ -54,10 +68,15 @@ impl Tray {
             tray,
             idle_icon,
             recording_icon,
+            paused_icon,
+            pause_item,
+            finish_item,
             quit_id,
             prefs_id,
             logs_id,
             perms_id,
+            pause_id,
+            finish_id,
         })
     }
 
@@ -73,25 +92,50 @@ impl Tray {
             let _ = self.tray.set_icon(Some(self.idle_icon.clone()));
         }
         let _ = self.tray.set_tooltip(Some("Whispy - Voice to Text"));
+        self.pause_item.set_enabled(false);
+        self.finish_item.set_enabled(false);
     }
 
     pub fn set_recording(&self, recording: bool) {
         if recording {
             #[cfg(target_os = "macos")]
             {
-                let _ = self.tray.set_icon_with_as_template(
-                    Some(self.recording_icon.clone()),
-                    false,
-                );
+                let _ = self
+                    .tray
+                    .set_icon_with_as_template(Some(self.recording_icon.clone()), false);
             }
             #[cfg(not(target_os = "macos"))]
             {
                 let _ = self.tray.set_icon(Some(self.recording_icon.clone()));
             }
             let _ = self.tray.set_tooltip(Some("Whispy - Recording..."));
+            self.pause_item.set_text("Pause Recording");
+            self.pause_item.set_enabled(true);
+            self.finish_item.set_enabled(true);
         } else {
             self.set_idle();
         }
+    }
+
+    pub fn set_paused(&self, pause_shortcut: &str, finish_shortcut: &str) {
+        #[cfg(target_os = "macos")]
+        {
+            let _ = self
+                .tray
+                .set_icon_with_as_template(Some(self.paused_icon.clone()), true);
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = self.tray.set_icon(Some(self.paused_icon.clone()));
+        }
+        let tooltip = format!(
+            "Whispy - Paused ({} to resume, {} to finish)",
+            pause_shortcut, finish_shortcut
+        );
+        let _ = self.tray.set_tooltip(Some(&tooltip));
+        self.pause_item.set_text("Resume Recording");
+        self.pause_item.set_enabled(true);
+        self.finish_item.set_enabled(true);
     }
 
     pub fn set_transcribing(&self) {
@@ -106,10 +150,15 @@ impl Tray {
             let _ = self.tray.set_icon(Some(self.idle_icon.clone()));
         }
         let _ = self.tray.set_tooltip(Some("Whispy - Transcribing..."));
+        self.pause_item.set_enabled(false);
+        self.finish_item.set_enabled(false);
     }
 
     pub fn check_menu_event(&self) -> Option<MenuId> {
-        MenuEvent::receiver().try_recv().ok().map(|e| e.id().clone())
+        MenuEvent::receiver()
+            .try_recv()
+            .ok()
+            .map(|e| e.id().clone())
     }
 }
 

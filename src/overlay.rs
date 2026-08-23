@@ -1,6 +1,7 @@
 use crate::app::UserEvent;
 use crate::overlay_html;
 use tao::dpi::{LogicalPosition, LogicalSize};
+use tao::event_loop::EventLoopProxy;
 use tao::window::{Window, WindowBuilder};
 use wry::{WebView, WebViewBuilder};
 
@@ -13,7 +14,10 @@ pub struct OverlayWindow {
 impl OverlayWindow {
     /// Create at app startup while no other app has meaningful focus.
     /// The window starts hidden and is shown/hidden via show()/hide().
-    pub fn new(event_loop: &tao::event_loop::EventLoopWindowTarget<UserEvent>) -> Self {
+    pub fn new(
+        event_loop: &tao::event_loop::EventLoopWindowTarget<UserEvent>,
+        event_proxy: EventLoopProxy<UserEvent>,
+    ) -> Self {
         let (pos_x, pos_y) = screen_bottom_center(event_loop);
 
         let window = WindowBuilder::new()
@@ -24,7 +28,7 @@ impl OverlayWindow {
             .with_resizable(false)
             .with_transparent(true)
             .with_visible(false)
-            .with_inner_size(LogicalSize::new(220.0, 48.0))
+            .with_inner_size(LogicalSize::new(360.0, 56.0))
             .with_position(LogicalPosition::new(pos_x, pos_y))
             .build(event_loop)
             .expect("Failed to create overlay window");
@@ -35,6 +39,11 @@ impl OverlayWindow {
         let webview = WebViewBuilder::new()
             .with_html(&html)
             .with_transparent(true)
+            .with_ipc_handler(move |request| {
+                if request.body() == "toggle_pause" {
+                    let _ = event_proxy.send_event(UserEvent::OverlayTogglePause);
+                }
+            })
             .build(&window)
             .expect("Failed to create overlay webview");
 
@@ -74,6 +83,19 @@ impl OverlayWindow {
             .evaluate_script(&format!("updateLevels({})", json));
     }
 
+    pub fn set_recording(&self) {
+        let _ = self.webview.evaluate_script("setRecording()");
+        self.window.request_redraw();
+    }
+
+    pub fn set_paused(&self, pause_shortcut: &str, finish_shortcut: &str) {
+        let _ = self.webview.evaluate_script(&format!(
+            "setPaused({:?}, {:?})",
+            pause_shortcut, finish_shortcut
+        ));
+        self.window.request_redraw();
+    }
+
     pub fn set_processing(&self) {
         let _ = self.webview.evaluate_script("setProcessing()");
         self.window.request_redraw();
@@ -83,8 +105,8 @@ impl OverlayWindow {
 fn screen_bottom_center(
     event_loop: &tao::event_loop::EventLoopWindowTarget<UserEvent>,
 ) -> (f64, f64) {
-    let overlay_w = 220.0;
-    let overlay_h = 48.0;
+    let overlay_w = 360.0;
+    let overlay_h = 56.0;
     let margin_bottom = 30.0;
 
     if let Some(monitor) = event_loop.primary_monitor() {
@@ -118,7 +140,8 @@ fn configure_ns_window(window: &Window) {
                 | NSWindowCollectionBehavior::Stationary
                 | NSWindowCollectionBehavior::IgnoresCycle,
         );
-        ns_window.setIgnoresMouseEvents(true);
+        // The overlay remains non-focusable, but its pause button must receive clicks.
+        ns_window.setIgnoresMouseEvents(false);
     }
 }
 
@@ -148,6 +171,10 @@ fn hide_window(window: &Window) {
 #[cfg(not(target_os = "macos"))]
 fn configure_ns_window(_window: &Window) {}
 #[cfg(not(target_os = "macos"))]
-fn show_without_focus(window: &Window) { window.set_visible(true); }
+fn show_without_focus(window: &Window) {
+    window.set_visible(true);
+}
 #[cfg(not(target_os = "macos"))]
-fn hide_window(window: &Window) { window.set_visible(false); }
+fn hide_window(window: &Window) {
+    window.set_visible(false);
+}

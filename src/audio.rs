@@ -130,6 +130,24 @@ impl AudioRecorder {
             .collect()
     }
 
+    pub fn pause(&self) -> Result<()> {
+        self.stream
+            .as_ref()
+            .context("No active recording stream")?
+            .pause()?;
+        tracing::info!("Recording paused");
+        Ok(())
+    }
+
+    pub fn resume(&self) -> Result<()> {
+        self.stream
+            .as_ref()
+            .context("No active recording stream")?
+            .play()?;
+        tracing::info!("Recording resumed");
+        Ok(())
+    }
+
     /// Stop the input stream and take captured samples. Prefer the **main thread** on macOS (CoreAudio).
     pub fn end_capture(&mut self) -> Result<RawCapture> {
         self.stream.take();
