@@ -45,7 +45,11 @@ pub fn build(
     let hotkey_options: String = HOTKEYS
         .iter()
         .map(|(value, label)| {
-            let selected = if *value == current_hotkey { " selected" } else { "" };
+            let selected = if *value == current_hotkey {
+                " selected"
+            } else {
+                ""
+            };
             format!(r#"<option value="{value}"{selected}>{label}</option>"#)
         })
         .collect::<Vec<_>>()
@@ -62,7 +66,11 @@ pub fn build(
     let lang_options_rest: String = LANGUAGES
         .iter()
         .map(|(code, name)| {
-            let selected = if *code == current_language { " selected" } else { "" };
+            let selected = if *code == current_language {
+                " selected"
+            } else {
+                ""
+            };
             format!(r#"<option value="{code}"{selected}>{name}</option>"#)
         })
         .collect::<Vec<_>>()
@@ -152,7 +160,7 @@ pub fn build(
   <div class="field">
     <label for="hotkey">Shortcut</label>
     <select id="hotkey">{hotkey_options}</select>
-    <div class="hint">Global shortcut to start/stop recording (takes effect after save)</div>
+    <div class="hint">The selected shortcut starts and finishes recording. Pause or resume anytime with Ctrl + Shift + P (takes effect after save).</div>
   </div>
   <div class="buttons">
     <button class="test" id="testBtn" onclick="testApi()">Test API</button>

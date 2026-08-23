@@ -10,12 +10,15 @@ use tao::event_loop::EventLoopProxy;
 pub enum Phase {
     Idle,
     Recording,
+    Paused,
     Transcribing,
 }
 
 #[derive(Debug, Clone)]
 pub enum UserEvent {
     TranscriptionComplete(Result<String, String>),
+    OverlayTogglePause,
+    OverlayFinish,
 }
 
 pub struct AppState {
@@ -54,9 +57,19 @@ impl AppState {
     pub fn toggle_recording(&mut self, tray: &Tray) {
         match self.phase {
             Phase::Idle => self.start_recording(tray),
-            Phase::Recording => self.stop_recording(tray),
+            Phase::Recording | Phase::Paused => self.stop_recording(tray),
             Phase::Transcribing => {
                 tracing::warn!("Already transcribing, ignoring hotkey");
+            }
+        }
+    }
+
+    pub fn toggle_pause(&mut self, tray: &Tray) {
+        match self.phase {
+            Phase::Recording => self.pause_recording(tray),
+            Phase::Paused => self.resume_recording(tray),
+            Phase::Idle | Phase::Transcribing => {
+                tracing::debug!("Ignoring pause shortcut while {:?}", self.phase);
             }
         }
     }
@@ -80,6 +93,35 @@ impl AppState {
             Err(e) => {
                 tracing::error!("Failed to start recording: {}", e);
                 show_notification("Whispy", &format!("Failed to start recording: {}", e));
+            }
+        }
+    }
+
+    fn pause_recording(&mut self, tray: &Tray) {
+        match self.recorder.pause() {
+            Ok(()) => {
+                self.phase = Phase::Paused;
+                tray.set_paused(
+                    crate::hotkey::pause_hotkey_label(),
+                    crate::hotkey::record_hotkey_label(&self.config.hotkey),
+                );
+            }
+            Err(e) => {
+                tracing::error!("Failed to pause recording: {}", e);
+                show_notification("Whispy", &format!("Failed to pause recording: {}", e));
+            }
+        }
+    }
+
+    fn resume_recording(&mut self, tray: &Tray) {
+        match self.recorder.resume() {
+            Ok(()) => {
+                self.phase = Phase::Recording;
+                tray.set_recording(true);
+            }
+            Err(e) => {
+                tracing::error!("Failed to resume recording: {}", e);
+                show_notification("Whispy", &format!("Failed to resume recording: {}", e));
             }
         }
     }
@@ -116,9 +158,10 @@ impl AppState {
                 Ok(w) => w,
                 Err(e) => {
                     tracing::error!("Failed to encode WAV: {}", e);
-                    let _ = proxy.send_event(UserEvent::TranscriptionComplete(Err(
-                        format!("Recording error: {}", e),
-                    )));
+                    let _ = proxy.send_event(UserEvent::TranscriptionComplete(Err(format!(
+                        "Recording error: {}",
+                        e
+                    ))));
                     return;
                 }
             };
@@ -136,10 +179,9 @@ impl AppState {
 
             let event = match result {
                 Ok(text) => UserEvent::TranscriptionComplete(Ok(text)),
-                Err(e) => UserEvent::TranscriptionComplete(Err(format!(
-                    "Transcription failed: {}",
-                    e
-                ))),
+                Err(e) => {
+                    UserEvent::TranscriptionComplete(Err(format!("Transcription failed: {}", e)))
+                }
             };
             let _ = proxy.send_event(event);
         });

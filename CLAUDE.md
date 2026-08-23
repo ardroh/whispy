@@ -25,7 +25,7 @@ Whispy is a macOS menu bar app that records audio via global hotkey, transcribes
 
 ### State Machine
 
-`Idle → Recording (hotkey) → Transcribing (hotkey) → Idle (API response + paste)`
+`Idle → Recording (record hotkey) ⇄ Paused (Ctrl+Shift+P or overlay button) → Transcribing (record hotkey) → Idle (API response + paste)`
 
 The `Phase` enum in `app.rs` drives all transitions. `AppState` is the central coordinator — it owns the audio recorder, HTTP client, and event proxy.
 
@@ -33,7 +33,7 @@ The `Phase` enum in `app.rs` drives all transitions. `AppState` is the central c
 
 - **Main thread**: `tao` event loop polling at 16ms. Owns tray icon, hotkey handler, and preferences window. All `AppState` mutations happen here.
 - **Audio thread**: OS-managed `cpal` stream callback pushes samples into `Arc<Mutex<Vec<f32>>>`.
-- **Transcription thread**: Spawned per-request in `stop_recording()`. Creates its own single-threaded `tokio` runtime for async `reqwest` call. Posts result back via `EventLoopProxy<UserEvent>`.
+- **Transcription thread**: Spawned per-request when finishing a recording. Creates its own single-threaded `tokio` runtime for async `reqwest` call. Posts result back via `EventLoopProxy<UserEvent>`.
 - **Clipboard restore thread**: Spawned after Cmd+V paste, sleeps 200ms then restores original clipboard.
 
 ### Audio Pipeline

@@ -20,6 +20,11 @@ fn main() {
         .save(assets.join("tray-recording.png"))
         .expect("write tray-recording");
 
+    let tray_paused = render_tray_paused(44);
+    tray_paused
+        .save(assets.join("tray-paused.png"))
+        .expect("write tray-paused");
+
     let app = render_app_icon(1024);
     let src1024 = assets.join("app-icon-source-1024.png");
     app.save(&src1024).expect("write app 1024");
@@ -157,6 +162,33 @@ fn render_tray_recording(size: u32) -> RgbaImage {
                 g = ((g as f32 + gloss * 30.0).min(255.0)) as u8;
                 b = ((b as f32 + gloss * 20.0).min(255.0)) as u8;
                 img.put_pixel(x, y, Rgba([r, g, b, (a * 255.0) as u8]));
+            }
+        }
+    }
+    img
+}
+
+/// Template-style paused glyph: a calm ring with a centered pause mark.
+fn render_tray_paused(size: u32) -> RgbaImage {
+    let mut img = RgbaImage::from_pixel(size, size, Rgba([0, 0, 0, 0]));
+    let scale = size as f32 / 44.0;
+    let cx = size as f32 * 0.5;
+    let cy = size as f32 * 0.5;
+
+    for y in 0..size {
+        for x in 0..size {
+            let px = (x as f32 + 0.5 - cx) / scale;
+            let py = (y as f32 + 0.5 - cy) / scale;
+            let d = (px * px + py * py).sqrt();
+            let ring = (d - 15.5).abs() - 1.6;
+            let pause_left = sdf_capsule(px, py, -4.0, -6.0, -4.0, 6.0, 1.6);
+            let pause_right = sdf_capsule(px, py, 4.0, -6.0, 4.0, 6.0, 1.6);
+            let alpha = smooth_complement(ring).max(
+                smooth_complement(pause_left)
+                    .max(smooth_complement(pause_right)),
+            );
+            if alpha > 0.001 {
+                img.put_pixel(x, y, Rgba([0, 0, 0, (alpha * 235.0) as u8]));
             }
         }
     }

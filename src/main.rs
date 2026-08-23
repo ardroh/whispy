@@ -12,11 +12,11 @@ mod transcribe;
 mod tray;
 
 use app::{AppState, UserEvent};
-use hotkey::HotkeyHandler;
+use hotkey::{pause_hotkey_label, record_hotkey_label, HotkeyAction, HotkeyHandler};
 use preferences::PreferencesWindow;
+use std::time::{Duration, Instant};
 use tao::event::{Event, StartCause, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
-use std::time::{Duration, Instant};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -41,8 +41,7 @@ fn init_logging() -> tracing_appender::non_blocking::WorkerGuard {
         .with_writer(file_writer)
         .with_ansi(false);
 
-    let stderr_layer = tracing_subscriber::fmt::layer()
-        .with_writer(std::io::stderr);
+    let stderr_layer = tracing_subscriber::fmt::layer().with_writer(std::io::stderr);
 
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
@@ -61,14 +60,14 @@ fn main() {
 
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
 
-    let mut state = AppState::new(event_loop.create_proxy())
-        .expect("Failed to initialize app state");
+    let event_proxy = event_loop.create_proxy();
+    let mut state = AppState::new(event_proxy.clone()).expect("Failed to initialize app state");
 
     permissions::ensure_prompted_on_first_launch();
 
     let tray = tray::Tray::new().expect("Failed to create tray icon");
-    let mut hotkey_handler = HotkeyHandler::new(&state.config.hotkey)
-        .expect("Failed to register global hotkey");
+    let mut hotkey_handler =
+        HotkeyHandler::new(&state.config.hotkey).expect("Failed to register global hotkey");
     let mut prefs_window: Option<PreferencesWindow> = None;
 
     let mut overlay: Option<overlay::OverlayWindow> = None;
@@ -81,7 +80,7 @@ fn main() {
                 tracing::info!("Whispy ready");
                 // Create overlay at startup (hidden) so showing it later
                 // never steals focus from the active app
-                overlay = Some(overlay::OverlayWindow::new(event_loop));
+                overlay = Some(overlay::OverlayWindow::new(event_loop, event_proxy.clone()));
             }
 
             Event::WindowEvent {
@@ -101,21 +100,35 @@ fn main() {
                 }
             }
 
-            Event::UserEvent(UserEvent::TranscriptionComplete(result)) => {
-                state.handle_transcription(&tray, result);
-            }
+            Event::UserEvent(user_event) => match user_event {
+                UserEvent::TranscriptionComplete(result) => {
+                    state.handle_transcription(&tray, result);
+                }
+                UserEvent::OverlayTogglePause => {
+                    state.toggle_pause(&tray);
+                    sync_overlay_phase(&mut overlay, &state);
+                }
+                UserEvent::OverlayFinish => {
+                    state.toggle_recording(&tray);
+                    sync_overlay_phase(&mut overlay, &state);
+                }
+            },
 
             // Run once per event-loop tick, including when a global hotkey wakes the loop
             // (`WaitCancelled`). Hotkeys were previously only handled on `ResumeTimeReached`,
             // which could delay stop/start by a full timer interval or more.
             Event::MainEventsCleared => {
-                if hotkey_handler.poll_hotkey_pressed() {
-                    if state.phase == app::Phase::Recording {
-                        if let Some(ref ov) = overlay {
-                            ov.set_processing();
+                if let Some(action) = hotkey_handler.poll_action() {
+                    match action {
+                        HotkeyAction::ToggleRecording => {
+                            state.toggle_recording(&tray);
+                            sync_overlay_phase(&mut overlay, &state);
+                        }
+                        HotkeyAction::TogglePause => {
+                            state.toggle_pause(&tray);
+                            sync_overlay_phase(&mut overlay, &state);
                         }
                     }
-                    state.toggle_recording(&tray);
                 }
 
                 if let Some(menu_id) = tray.check_menu_event() {
@@ -123,13 +136,18 @@ fn main() {
                         *control_flow = ControlFlow::Exit;
                     } else if menu_id == tray.prefs_id {
                         if prefs_window.is_none() {
-                            prefs_window =
-                                Some(PreferencesWindow::new(event_loop, &state.config));
+                            prefs_window = Some(PreferencesWindow::new(event_loop, &state.config));
                         }
                     } else if menu_id == tray.logs_id {
                         open_log_file();
                     } else if menu_id == tray.perms_id {
                         permissions::check_permissions_interactive();
+                    } else if menu_id == tray.pause_id {
+                        state.toggle_pause(&tray);
+                        sync_overlay_phase(&mut overlay, &state);
+                    } else if menu_id == tray.finish_id {
+                        state.toggle_recording(&tray);
+                        sync_overlay_phase(&mut overlay, &state);
                     }
                 }
 
@@ -138,6 +156,9 @@ fn main() {
                         app::Phase::Recording => {
                             ov.show();
                             ov.update_levels(&state.audio_levels(20));
+                        }
+                        app::Phase::Paused => {
+                            ov.show();
                         }
                         app::Phase::Transcribing => {}
                         app::Phase::Idle => {
@@ -150,6 +171,31 @@ fn main() {
             _ => {}
         }
     });
+}
+
+fn sync_overlay_phase(overlay: &mut Option<overlay::OverlayWindow>, state: &AppState) {
+    let Some(ov) = overlay.as_mut() else {
+        return;
+    };
+
+    match state.phase {
+        app::Phase::Recording => {
+            ov.show();
+            ov.set_recording();
+        }
+        app::Phase::Paused => {
+            ov.show();
+            ov.set_paused(
+                pause_hotkey_label(),
+                record_hotkey_label(&state.config.hotkey),
+            );
+        }
+        app::Phase::Transcribing => {
+            ov.show();
+            ov.set_processing();
+        }
+        app::Phase::Idle => ov.hide(),
+    }
 }
 
 fn open_log_file() {
